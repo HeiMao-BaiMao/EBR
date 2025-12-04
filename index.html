@@ -1,43 +1,40 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
   <head>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="/src/styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
+    <title>EBR - EPUB Viewer</title>
     <script type="module" src="/src/main.ts" defer></script>
   </head>
 
   <body>
-    <main class="container">
-      <h1>Welcome to Tauri</h1>
+    <main class="app">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Drag & Drop EPUB</p>
+          <h1>EBR</h1>
+          <p class="subtitle">EPUB.jsでローカルのEPUBをすぐにプレビュー</p>
+        </div>
+      </header>
 
-      <div class="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/src/assets/vite.svg" class="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img
-            src="/src/assets/tauri.svg"
-            class="logo tauri"
-            alt="Tauri logo"
-          />
-        </a>
-        <a href="https://www.typescriptlang.org/docs" target="_blank">
-          <img
-            src="/src/assets/typescript.svg"
-            class="logo typescript"
-            alt="typescript logo"
-          />
-        </a>
-      </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
+      <section class="layout">
+        <div class="panel">
+          <div id="drop-area" class="drop-area">
+            <div class="drop-icon" aria-hidden="true">📚</div>
+            <p class="drop-title">EPUBをドラッグ＆ドロップ</p>
+            <p class="drop-subtitle">クリックしてファイルを選択することもできます</p>
+            <button type="button" class="ghost-button">EPUBファイルを選択</button>
+            <input type="file" id="file-input" accept=".epub" hidden />
+            <p id="file-name" class="file-name">ファイルが未選択です</p>
+            <p id="status" class="status">EPUB.jsで表示します</p>
+          </div>
+        </div>
 
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-msg"></p>
+        <div class="panel viewer-panel">
+          <div id="viewer" class="viewer" aria-live="polite" aria-label="EPUB viewer"></div>
+        </div>
+      </section>
     </main>
   </body>
 </html>
