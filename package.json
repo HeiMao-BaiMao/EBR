@@ -10,14 +10,14 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2",
+    "@tauri-apps/api": "^2.9.1",
     "@tauri-apps/plugin-dialog": "^2.4.2",
-    "@tauri-apps/plugin-opener": "^2",
-    "epubjs": "npm:@intity/epub-js@^0.3.96"
+    "@tauri-apps/plugin-opener": "^2.5.2",
+    "epubjs": "github:HeiMao-BaiMao/epub-js"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2",
-    "typescript": "~5.6.2",
-    "vite": "^6.0.3"
+    "@tauri-apps/cli": "^2.9.6",
+    "typescript": "~5.6.3",
+    "vite": "^6.4.1"
   }
 }

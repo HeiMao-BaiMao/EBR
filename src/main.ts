@@ -1,3 +1,4 @@
+// @ts-ignore
 import ePub from "epubjs";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -7,7 +8,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 type EpubRendition = any;
 type Theme = 'light' | 'dark';
 
-interface Book {
+interface BookType { // Renamed from Book to BookType to avoid conflict with potential imported Book type
   path: string;
   title: string;
   author: string;
@@ -18,7 +19,7 @@ interface Book {
 let activeRendition: EpubRendition | null = null;
 let currentDirection: string = "ltr";
 let libraryPaths: string[] = [];
-let books: Book[] = [];
+let books: BookType[] = []; // Use BookType here
 let currentTheme: Theme = 'light';
 
 // Helpers
@@ -79,7 +80,7 @@ async function loadLibrary() {
 async function scanLibrary() {
   try {
     console.log("Scanning paths:", libraryPaths);
-    const result = await invoke<Book[]>("scan_books", { paths: libraryPaths });
+    const result = await invoke<BookType[]>("scan_books", { paths: libraryPaths });
     books = result;
     renderBookshelf();
   } catch (error) {
@@ -169,6 +170,16 @@ async function openBook(filePath: string) {
   console.log("Opening book from path:", filePath);
   console.log("Converted asset URL:", assetUrl);
   
+  // Detect direction via Rust (scans CSS for vertical-rl)
+  try {
+      const dir = await invoke<string>("get_book_direction", { path: filePath });
+      console.log("Rust detected direction:", dir);
+      currentDirection = dir;
+  } catch (e) {
+      console.warn("Failed to detect direction via Rust:", e);
+      currentDirection = "ltr";
+  }
+  
   await renderEpub(assetUrl);
 }
 
@@ -202,25 +213,61 @@ async function renderEpub(url: string) {
 
   try {
       console.log("Initializing ePub with URL:", url);
-      const book = ePub(url);
+      const book: any = ePub(url); // Cast to any
       
-      // Wait for book to be ready before rendering to ensure metadata is available
+      // Wait for book.ready before rendering to ensure metadata is available
+      // It's a Promise in Book type, so we can await it.
       console.log("Waiting for book.ready...");
       await book.ready;
       console.log("Book is ready");
 
-      // Retrieve metadata safely
-      let metadata;
+      // Try waiting for opened if available
       try {
-          metadata = await book.loaded.metadata;
+          if (book.opened) {
+              console.log("Waiting for book.opened...");
+              await book.opened;
+              console.log("Book is opened");
+          }
+      } catch (e) { console.warn("Error waiting for opened:", e); }
+
+      // Log internal structures to debug
+      // @ts-ignore
+      console.log("Debug: book.package:", book.package);
+      // @ts-ignore
+      console.log("Debug: book.loaded:", book.loaded);
+
+      // Retrieve metadata safely using .then()
+      let metadata: any = {};
+      try {
+          console.log("Waiting for book.loaded.metadata...");
+          metadata = await book.loaded.metadata; // Await the Promise directly
+          console.log("Loaded Metadata:", metadata);
       } catch (e) {
           console.warn("Failed to load metadata:", e);
       }
       
-      const direction = metadata?.direction;
+      // If Rust detection failed or returned ltr, maybe metadata has better info?
+      // But usually Rust CSS check is robust for vertical text.
+      // We will trust currentDirection if it was set to rtl by Rust.
+      if (currentDirection !== "rtl") {
+          let direction = metadata?.direction;
+          if (!direction) {
+            try {
+                // @ts-ignore
+                if (book.package?.metadata?.direction) {
+                    // @ts-ignore
+                    direction = book.package.metadata.direction;
+                } else if (book.spine?.direction) {
+                   direction = book.spine.direction;
+                }
+            } catch (e) {}
+          }
+          if (direction) {
+              currentDirection = direction;
+          }
+      }
       
-      currentDirection = direction || "ltr";
-      console.log("Book direction:", currentDirection);
+      console.log("Final Book direction:", currentDirection);
 
       enterFullscreen();
 
@@ -330,3 +377,4 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
+

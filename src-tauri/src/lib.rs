@@ -47,6 +47,24 @@ fn scan_books(paths: Vec<String>) -> Vec<Book> {
 }
 
 #[tauri::command]
+fn get_book_direction(path: String) -> String {
+    if let Ok(mut doc) = EpubDoc::new(&path) {
+        // Check CSS files for vertical writing mode
+        let resources = doc.resources.clone();
+        for (id, resource) in resources {
+            if resource.mime == "text/css" {
+                if let Some((css_content, _mime)) = doc.get_resource_str(&id) {
+                    if css_content.contains("vertical-rl") {
+                        return "rtl".to_string();
+                    }
+                }
+            }
+        }
+    }
+    "ltr".to_string()
+}
+
+#[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
@@ -56,7 +74,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![greet, scan_books])
+        .invoke_handler(tauri::generate_handler![greet, scan_books, get_book_direction])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
