@@ -10,31 +10,39 @@
 
   <body>
     <main class="app">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">Drag & Drop EPUB</p>
-          <h1>EBR</h1>
-          <p class="subtitle">EPUB.jsでローカルのEPUBをすぐにプレビュー</p>
-        </div>
-      </header>
-
-      <section class="layout">
-        <div class="panel">
-          <div id="drop-area" class="drop-area">
-            <div class="drop-icon" aria-hidden="true">📚</div>
-            <p class="drop-title">EPUBをドラッグ＆ドロップ</p>
-            <p class="drop-subtitle">クリックしてファイルを選択することもできます</p>
-            <button type="button" class="ghost-button">EPUBファイルを選択</button>
-            <input type="file" id="file-input" accept=".epub" hidden />
-            <p id="file-name" class="file-name">ファイルが未選択です</p>
-            <p id="status" class="status">EPUB.jsで表示します</p>
+      <!-- Bookshelf View -->
+      <div id="bookshelf-view" class="view active">
+        <header class="library-header">
+          <h1>My Library</h1>
+          <div class="header-controls">
+            <button id="theme-toggle" class="icon-button" aria-label="Toggle Theme" title="Toggle Light/Dark Mode">
+              <span class="icon">🌓</span>
+            </button>
+            <button id="add-folder-btn" class="primary-button">
+              <span class="icon">+</span> Add Folder
+            </button>
+          </div>
+        </header>
+        
+        <div id="library-grid" class="library-grid">
+          <!-- Books will be injected here -->
+          <div class="empty-state" id="empty-state">
+            <p>No books found. Add a folder to scan for EPUBs.</p>
           </div>
         </div>
+      </div>
 
+      <!-- Reader View -->
+      <div id="reader-view" class="view hidden">
+        <button id="back-btn" class="back-button">← Back to Library</button>
         <div class="panel viewer-panel">
           <div id="viewer" class="viewer" aria-live="polite" aria-label="EPUB viewer"></div>
         </div>
-      </section>
+      </div>
+      
+      <!-- Hidden file input for legacy support (optional) -->
+      <input type="file" id="file-input" accept=".epub" hidden />
+      <p id="status" class="status" style="display: none;"></p>
     </main>
   </body>
 </html>

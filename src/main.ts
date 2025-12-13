@@ -1,29 +1,27 @@
-export {};
+import ePub from "epubjs";
+import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
-const EPUB_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js";
+// Define types
+type EpubRendition = any;
+type Theme = 'light' | 'dark';
 
-type EpubFactory = (input: ArrayBuffer | string) => EpubBook;
-
-type EpubBook = {
-  renderTo: (
-    element: HTMLElement,
-    options: { width: string | number; height: string | number }
-  ) => EpubRendition;
-};
-
-type EpubRendition = {
-  display: (target?: string) => Promise<void>;
-  destroy: () => void;
-};
-
-declare global {
-  interface Window {
-    ePub?: EpubFactory;
-  }
+interface Book {
+  path: string;
+  title: string;
+  author: string;
+  cover_base64?: string;
 }
 
+// State
 let activeRendition: EpubRendition | null = null;
+let currentDirection: string = "ltr";
+let libraryPaths: string[] = [];
+let books: Book[] = [];
+let currentTheme: Theme = 'light';
 
+// Helpers
 const getElement = <T extends HTMLElement>(selector: string): T => {
   const element = document.querySelector<T>(selector);
   if (!element) {
@@ -32,125 +30,279 @@ const getElement = <T extends HTMLElement>(selector: string): T => {
   return element;
 };
 
-async function loadEpubScript(): Promise<EpubFactory> {
-  if (window.ePub) {
-    return window.ePub;
+// --- Theme Logic ---
+
+function initTheme() {
+  const savedTheme = localStorage.getItem('theme') as Theme | null;
+  if (savedTheme) {
+    currentTheme = savedTheme;
+  } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    currentTheme = 'dark';
   }
+  
+  applyTheme(currentTheme);
+}
 
-  await new Promise<void>((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = EPUB_SCRIPT_URL;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("EPUB.jsの読み込みに失敗しました"));
-    document.head.appendChild(script);
-  });
+function toggleTheme() {
+  currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+  localStorage.setItem('theme', currentTheme);
+  applyTheme(currentTheme);
+}
 
-  if (!window.ePub) {
-    throw new Error("EPUB.jsが利用できません");
+function applyTheme(theme: Theme) {
+  if (theme === 'dark') {
+    document.body.classList.add('dark-theme');
+  } else {
+    document.body.classList.remove('dark-theme');
   }
-
-  return window.ePub;
-}
-
-function showStatus(message: string) {
-  const statusEl = getElement<HTMLParagraphElement>("#status");
-  statusEl.textContent = message;
-}
-
-function setFileName(name: string) {
-  const fileNameEl = getElement<HTMLParagraphElement>("#file-name");
-  fileNameEl.textContent = name;
-}
-
-function resetViewer() {
-  const viewer = getElement<HTMLDivElement>("#viewer");
-  viewer.innerHTML = "";
+  
+  // If reader is active, update its theme
   if (activeRendition) {
-    activeRendition.destroy();
+    try {
+      activeRendition.themes.select(theme);
+    } catch (e) {
+      console.warn("Failed to switch epub theme:", e);
+    }
+  }
+}
+
+// --- Bookshelf Logic ---
+
+async function loadLibrary() {
+  const stored = localStorage.getItem("libraryPaths");
+  if (stored) {
+    libraryPaths = JSON.parse(stored);
+    await scanLibrary();
+  }
+}
+
+async function scanLibrary() {
+  try {
+    console.log("Scanning paths:", libraryPaths);
+    const result = await invoke<Book[]>("scan_books", { paths: libraryPaths });
+    books = result;
+    renderBookshelf();
+  } catch (error) {
+    console.error("Failed to scan library:", error);
+  }
+}
+
+async function addLibraryPath() {
+  try {
+    const selected = await open({
+      multiple: false,
+      directory: true,
+    });
+
+    if (selected && typeof selected === "string") {
+      if (!libraryPaths.includes(selected)) {
+        libraryPaths.push(selected);
+        localStorage.setItem("libraryPaths", JSON.stringify(libraryPaths));
+        await scanLibrary();
+      }
+    }
+  } catch (e) {
+    console.error("Failed to open dialog:", e);
+  }
+}
+
+function renderBookshelf() {
+  const grid = getElement<HTMLDivElement>("#library-grid");
+  grid.innerHTML = "";
+
+  if (books.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state" id="empty-state">
+        <p>No books found. Add a folder to scan for EPUBs.</p>
+      </div>
+    `;
+    return;
+  }
+
+  books.forEach((book) => {
+    const card = document.createElement("div");
+    card.className = "book-card";
+    // Use arrow function to capture current book path
+    card.onclick = () => openBook(book.path);
+
+    const coverHtml = book.cover_base64
+      ? `<img src="${book.cover_base64}" alt="${book.title}" loading="lazy" />`
+      : `<span aria-hidden="true">📖</span>`;
+
+    card.innerHTML = `
+      <div class="book-cover ${!book.cover_base64 ? 'no-cover' : ''}">
+        ${coverHtml}
+      </div>
+      <div class="book-info">
+        <h3 class="book-title" title="${book.title}">${book.title}</h3>
+        <p class="book-author" title="${book.author}">${book.author}</p>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+// --- Reader Logic ---
+
+function showView(viewId: "bookshelf-view" | "reader-view") {
+  const bookshelf = getElement("#bookshelf-view");
+  const reader = getElement("#reader-view");
+
+  if (viewId === "bookshelf-view") {
+    bookshelf.classList.remove("hidden");
+    bookshelf.classList.add("active");
+    reader.classList.add("hidden");
+    reader.classList.remove("active");
+  } else {
+    bookshelf.classList.add("hidden");
+    bookshelf.classList.remove("active");
+    reader.classList.remove("hidden");
+    reader.classList.add("active");
+  }
+}
+
+async function openBook(filePath: string) {
+  showView("reader-view");
+  
+  // Convert local path to asset URL (e.g., asset://localhost/...)
+  const assetUrl = convertFileSrc(filePath);
+  console.log("Opening book from:", assetUrl);
+  
+  await renderEpub(assetUrl);
+}
+
+function closeBook() {
+  if (activeRendition) {
+    try {
+        activeRendition.destroy();
+    } catch (e) {
+        console.warn("Error destroying rendition:", e);
+    }
     activeRendition = null;
   }
+  exitFullscreen();
+  showView("bookshelf-view");
 }
 
-async function renderEpub(file: File) {
-  const dropArea = getElement<HTMLDivElement>("#drop-area");
+function enterFullscreen() {
+  document.body.classList.add("fullscreen-mode");
+}
+
+function exitFullscreen() {
+  document.body.classList.remove("fullscreen-mode");
+}
+
+async function renderEpub(url: string) {
   const viewer = getElement<HTMLDivElement>("#viewer");
+  viewer.innerHTML = ""; // Clear previous
 
-  showStatus("EPUB.jsを読み込み中...");
-  const ePubFactory = await loadEpubScript();
+  try {
+      const book = ePub(url);
+      
+      // Wait for book to be ready before rendering to ensure metadata is available
+      await book.ready;
 
-  showStatus("EPUBを展開中...");
-  const buffer = await file.arrayBuffer();
-  resetViewer();
+      // @ts-ignore
+      const { direction } = book.package.metadata;
+      currentDirection = direction || "ltr";
+      console.log("Book direction:", currentDirection);
 
-  const book = ePubFactory(buffer);
-  activeRendition = book.renderTo(viewer, {
-    width: "100%",
-    height: "100%",
-  });
+      enterFullscreen();
 
-  await activeRendition.display();
-  dropArea.classList.add("has-book");
-  setFileName(file.name);
-  showStatus("EPUBを表示しています");
-}
+      activeRendition = book.renderTo(viewer, {
+        width: "100%",
+        height: "100%",
+        flow: "paginated",
+        manager: "default",
+        // @ts-ignore
+        spread: "always",
+        allowScriptedContent: true
+      });
 
-function validateFile(file: File | undefined): File | null {
-  if (!file) {
-    return null;
+      // Register Themes
+      // Dark Theme
+      activeRendition.themes.register("dark", {
+        body: { 
+          color: "#f1f5f9 !important",
+          background: "#0f172a !important" 
+        }
+      });
+      // Light Theme (Default)
+      activeRendition.themes.register("light", {
+        body: { 
+          color: "#0f172a !important",
+          background: "#ffffff !important" 
+        }
+      });
+
+      // Select current theme
+      activeRendition.themes.select(currentTheme);
+
+      await activeRendition.display();
+      
+      // Handle key events
+      setupKeyboardNavigation();
+
+  } catch (e) {
+      console.error("Error rendering EPUB:", e);
+      viewer.innerHTML = `<div style="color:red; padding:20px;">Error loading book: ${e}</div>`;
   }
-
-  if (!file.name.toLowerCase().endsWith(".epub")) {
-    showStatus("EPUBファイル（.epub）を選択してください");
-    return null;
-  }
-
-  return file;
 }
 
-function setupFileInput() {
-  const fileInput = getElement<HTMLInputElement>("#file-input");
-  const dropArea = getElement<HTMLDivElement>("#drop-area");
+function setupKeyboardNavigation() {
+  // Remove previous listeners to avoid duplicates if possible, 
+  // but simpler here to just rely on the fact that we destroy/recreate the view.
+  // Ideally, we should attach to document and check state.
+}
 
-  dropArea.addEventListener("click", () => fileInput.click());
+// Global key listener
+window.addEventListener("keyup", (e) => {
+    if (!activeRendition) return;
+    if (document.getElementById("reader-view")?.classList.contains("hidden")) return;
 
-  fileInput.addEventListener("change", async () => {
-    const file = validateFile(fileInput.files?.[0]);
-    if (file) {
-      await renderEpub(file);
+    const isRTL = currentDirection === "rtl";
+
+    switch (e.key) {
+      case "ArrowLeft":
+        if (isRTL) activeRendition.next();
+        else activeRendition.prev();
+        break;
+      case "ArrowRight":
+        if (isRTL) activeRendition.prev();
+        else activeRendition.next();
+        break;
+      case "Escape":
+        closeBook();
+        break;
     }
-  });
-}
-
-function setupDragAndDrop() {
-  const dropArea = getElement<HTMLDivElement>("#drop-area");
-
-  ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
-    dropArea.addEventListener(eventName, (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-    });
-  });
-
-  dropArea.addEventListener("dragenter", () => {
-    dropArea.classList.add("dragging");
-  });
-
-  dropArea.addEventListener("dragleave", () => {
-    dropArea.classList.remove("dragging");
-  });
-
-  dropArea.addEventListener("drop", async (event) => {
-    dropArea.classList.remove("dragging");
-    const file = validateFile(event.dataTransfer?.files?.[0]);
-    if (file) {
-      await renderEpub(file);
-    }
-  });
-}
+});
 
 window.addEventListener("DOMContentLoaded", () => {
-  setupFileInput();
-  setupDragAndDrop();
-  showStatus("EPUB.jsでEPUBを表示します。ファイルをドロップしてください。");
+  initTheme();
+  loadLibrary();
+  
+  const addBtn = document.getElementById("add-folder-btn");
+  if (addBtn) {
+      addBtn.addEventListener("click", addLibraryPath);
+  }
+
+  const backBtn = document.getElementById("back-btn");
+  if (backBtn) {
+      backBtn.addEventListener("click", closeBook);
+  }
+  
+  const themeBtn = document.getElementById("theme-toggle");
+  if (themeBtn) {
+      themeBtn.addEventListener("click", toggleTheme);
+  }
+  
+  window.addEventListener("resize", () => {
+    if (activeRendition) {
+      try {
+          activeRendition.resize();
+      } catch (e) {
+          console.warn("Resize error:", e);
+      }
+    }
+  });
 });
