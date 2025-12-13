@@ -166,7 +166,8 @@ async function openBook(filePath: string) {
   
   // Convert local path to asset URL (e.g., asset://localhost/...)
   const assetUrl = convertFileSrc(filePath);
-  console.log("Opening book from:", assetUrl);
+  console.log("Opening book from path:", filePath);
+  console.log("Converted asset URL:", assetUrl);
   
   await renderEpub(assetUrl);
 }
@@ -196,19 +197,34 @@ async function renderEpub(url: string) {
   const viewer = getElement<HTMLDivElement>("#viewer");
   viewer.innerHTML = ""; // Clear previous
 
+  // Ensure DOM is visible
+  await new Promise(resolve => requestAnimationFrame(resolve));
+
   try {
+      console.log("Initializing ePub with URL:", url);
       const book = ePub(url);
       
       // Wait for book to be ready before rendering to ensure metadata is available
+      console.log("Waiting for book.ready...");
       await book.ready;
+      console.log("Book is ready");
 
-      // @ts-ignore
-      const { direction } = book.package.metadata;
+      // Retrieve metadata safely
+      let metadata;
+      try {
+          metadata = await book.loaded.metadata;
+      } catch (e) {
+          console.warn("Failed to load metadata:", e);
+      }
+      
+      const direction = metadata?.direction;
+      
       currentDirection = direction || "ltr";
       console.log("Book direction:", currentDirection);
 
       enterFullscreen();
 
+      console.log("Rendering to viewer...");
       activeRendition = book.renderTo(viewer, {
         width: "100%",
         height: "100%",
@@ -216,10 +232,12 @@ async function renderEpub(url: string) {
         manager: "default",
         // @ts-ignore
         spread: "always",
+        // @ts-ignore
         allowScriptedContent: true
       });
 
       // Register Themes
+      console.log("Registering themes...");
       // Dark Theme
       activeRendition.themes.register("dark", {
         body: { 
@@ -238,14 +256,20 @@ async function renderEpub(url: string) {
       // Select current theme
       activeRendition.themes.select(currentTheme);
 
+      console.log("Displaying rendition...");
       await activeRendition.display();
+      console.log("Rendition displayed");
       
       // Handle key events
       setupKeyboardNavigation();
 
   } catch (e) {
       console.error("Error rendering EPUB:", e);
-      viewer.innerHTML = `<div style="color:red; padding:20px;">Error loading book: ${e}</div>`;
+      viewer.innerHTML = `<div style="color:red; padding:20px;">
+        <h3>Error loading book</h3>
+        <p>${e}</p>
+        <p>URL: ${url}</p>
+      </div>`;
   }
 }
 

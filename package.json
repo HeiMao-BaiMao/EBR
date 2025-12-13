@@ -13,7 +13,7 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.4.2",
     "@tauri-apps/plugin-opener": "^2",
-    "epubjs": "^0.3.93"
+    "epubjs": "npm:@intity/epub-js@^0.3.96"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
