@@ -19,7 +19,7 @@ importers:
         version: 2.5.2
       epubjs:
         specifier: github:HeiMao-BaiMao/epub-js
-        version: '@intity/epub-js@https://codeload.github.com/HeiMao-BaiMao/epub-js/tar.gz/5da97e8768edbd2da22325b3dc832b828e245889'
+        version: '@intity/epub-js@https://codeload.github.com/HeiMao-BaiMao/epub-js/tar.gz/071ba8604148cb442fcd866c6e39228b4bd778c2'
     devDependencies:
       '@tauri-apps/cli':
         specifier: ^2.9.6
@@ -189,8 +189,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@intity/epub-js@https://codeload.github.com/HeiMao-BaiMao/epub-js/tar.gz/5da97e8768edbd2da22325b3dc832b828e245889':
-    resolution: {tarball: https://codeload.github.com/HeiMao-BaiMao/epub-js/tar.gz/5da97e8768edbd2da22325b3dc832b828e245889}
+  '@intity/epub-js@https://codeload.github.com/HeiMao-BaiMao/epub-js/tar.gz/071ba8604148cb442fcd866c6e39228b4bd778c2':
+    resolution: {tarball: https://codeload.github.com/HeiMao-BaiMao/epub-js/tar.gz/071ba8604148cb442fcd866c6e39228b4bd778c2}
     version: 0.3.96
 
   '@rollup/rollup-android-arm-eabi@4.53.3':
@@ -786,7 +786,7 @@ snapshots:
   '@esbuild/win32-x64@0.25.12':
     optional: true
 
-  '@intity/epub-js@https://codeload.github.com/HeiMao-BaiMao/epub-js/tar.gz/5da97e8768edbd2da22325b3dc832b828e245889':
+  '@intity/epub-js@https://codeload.github.com/HeiMao-BaiMao/epub-js/tar.gz/071ba8604148cb442fcd866c6e39228b4bd778c2':
     dependencies:
       assert: 2.1.0
       core-js: 3.47.0
